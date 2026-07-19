@@ -24,7 +24,6 @@
       color: var(--accent);
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       overflow: hidden;
-      /* Prevents scrolling/bouncing */
       height: 100vh;
       width: 100vw;
       -webkit-user-select: none;
@@ -77,7 +76,7 @@
       display: none;
     }
 
-    /* Video Container - Fills screen completely */
+    /* Video Container */
     #video-container {
       display: none;
       position: absolute;
@@ -88,12 +87,10 @@
       background: #000;
     }
 
-    /* Native Video Player styling */
     video {
       width: 100%;
       height: 100%;
       object-fit: contain;
-      /* Keeps video proportional, adds black bars if needed */
       background: #000;
     }
 
@@ -105,7 +102,6 @@
       right: 0;
       bottom: 0;
       pointer-events: none;
-      /* Lets clicks pass through to video */
       overflow: hidden;
       z-index: 10;
     }
@@ -118,7 +114,6 @@
       flex-direction: column;
       gap: 10px;
       z-index: 20;
-      /* pointer-events none on container, auto on buttons so they are clickable */
       pointer-events: none;
     }
 
@@ -178,7 +173,6 @@
 
   <!-- Video Screen -->
   <div id="video-container">
-    <!-- Native HTML5 Player with built-in controls -->
     <video id="video-player" playsinline controls></video>
 
     <div id="reactions-container"></div>
@@ -212,9 +206,10 @@
 
     // --- 2. STATE VARIABLES ---
     const myId = Math.random().toString(36).substr(2, 9);
-    let isRemoteAction = false; // Crucial: Prevents infinite Firebase loops
-    let myRole = null; // 'host' or 'guest'
+    let isRemoteAction = false;
+    let myRole = null;
     let isPlayerReady = false;
+    let isUnlocking = false; // Prevents the iOS unlock from sending Play/Pause signals
 
     // --- 3. DOM ELEMENTS ---
     const setupScreen = document.getElementById('setup-screen');
@@ -227,12 +222,8 @@
     const reactionsContainer = document.getElementById('reactions-container');
 
     // --- 4. SETUP & ROLE ASSIGNMENT ---
-
-    // Assign roles. First person to connect is Host, second is Guest.
-    // When they disconnect, Firebase clears their role.
     db.ref('.info/connected').on('value', snap => {
       if (snap.val() === true) {
-        // Check if host slot is empty
         db.ref('host').once('value', hostSnap => {
           if (!hostSnap.exists()) {
             myRole = 'host';
@@ -268,22 +259,22 @@
     });
 
     readyBtn.addEventListener('click', () => {
-      // iOS WORKAROUND: You MUST call play() directly inside a click handler 
-      // to "unlock" the video element for future programmatic plays.
+      // iOS WORKAROUND: Must call play() inside a click handler to unlock the player
+      isUnlocking = true;
       video.play().then(() => {
-        video.pause(); // Immediately pause, we just needed to unlock it
+        video.pause(); // Immediately pause
+        isUnlocking = false;
         isPlayerReady = true;
         readyBtn.classList.add('active');
         readyBtn.innerHTML = '<i class="fas fa-check"></i> Ready!';
         statusText.innerText = "Waiting for the other person...";
-
         db.ref(myRole + '/ready').set(true);
       }).catch(e => {
         statusText.innerText = "Error unlocking video. Try tapping Ready again.";
+        isUnlocking = false;
       });
     });
 
-    // Listen for BOTH users to be ready before showing the video
     db.ref('host/ready').on('value', snap => {
       checkBothReady(snap.val(), 'host');
     });
@@ -297,83 +288,82 @@
     function checkBothReady(val, role) {
       if (role === 'host') hostReady = val;
       if (role === 'guest') guestReady = val;
-
-      if (hostReady && guestReady) {
-        startWatchParty();
-      }
+      if (hostReady && guestReady) startWatchParty();
     }
 
     // --- 5. START WATCH PARTY ---
     function startWatchParty() {
-      if (videoContainer.style.display === 'block') return; // Already started
-
+      if (videoContainer.style.display === 'block') return;
       setupScreen.style.display = 'none';
       videoContainer.style.display = 'block';
 
-      // Clear any old sync data from a previous session, start fresh
+      // Clear old sync data, start fresh. No initial time push.
       db.ref('sync').set({
         isPlaying: false,
-        currentTime: 0,
         lastActionBy: myId
       });
 
-      // Start listening for sync changes NOW
       listenForSync();
-
-      // Start drift correction interval
-      setInterval(sendDriftCorrection, 5000);
     }
 
-    // --- 6. SYNC LOGIC (The Tricky Part) ---
+    // --- 6. SYNC LOGIC ---
 
     // A. Listen to Firebase
     function listenForSync() {
       db.ref('sync').on('value', snap => {
         const data = snap.val();
-        if (!data || data.lastActionBy === myId) return; // Ignore own echoes
-
-        // Only apply sync if the player has been unlocked (Ready button tapped)
+        if (!data || data.lastActionBy === myId) return;
         if (!isPlayerReady) return;
 
-        // Handle Play/Pause
+        // 1. Handle Play/Pause ONLY
         if (data.isPlaying !== undefined && video.paused !== data.isPlaying) {
-          isRemoteAction = true; // Set flag so our local listener ignores this
+          isRemoteAction = true;
           if (data.isPlaying) {
-            video.play().catch(e => console.log("Autoplay blocked"));
+            video.play().then(() => {
+              isRemoteAction = false; // Successfully played, reset flag
+            }).catch(e => {
+              isRemoteAction = false; // Failed to play (backgrounded), reset flag
+              console.log("Autoplay prevented");
+            });
           } else {
             video.pause();
+            isRemoteAction = false; // Pause is synchronous, reset flag
           }
         }
 
-        // Handle Seeking (Only force seek if drift is > 1.5 seconds to avoid jitter)
-        if (data.currentTime !== undefined && Math.abs(video.currentTime - data.currentTime) > 1.5) {
-          isRemoteAction = true;
-          video.currentTime = data.currentTime;
+        // 2. Handle Seek ONLY (If data.currentTime exists, it means someone scrubbed)
+        if (data.currentTime !== undefined) {
+          // Only seek if the difference is significant enough to be a real scrub
+          // (and not just minor float drift between devices)
+          if (Math.abs(video.currentTime - data.currentTime) > 1.5) {
+            isRemoteAction = true;
+            video.currentTime = data.currentTime;
+          }
         }
       });
     }
 
     // B. Local Player Event Listeners
     video.addEventListener('play', () => {
-      if (isRemoteAction) {
+      if (isRemoteAction || isUnlocking) {
         isRemoteAction = false;
         return;
       }
+      // Only tell Firebase to play. DO NOT send currentTime.
       db.ref('sync').update({
         isPlaying: true,
-        currentTime: video.currentTime,
         lastActionBy: myId
       });
     });
 
     video.addEventListener('pause', () => {
-      if (isRemoteAction) {
+      if (isRemoteAction || isUnlocking) {
         isRemoteAction = false;
         return;
       }
+      // Only tell Firebase to pause. DO NOT send currentTime.
       db.ref('sync').update({
         isPlaying: false,
-        currentTime: video.currentTime,
         lastActionBy: myId
       });
     });
@@ -383,29 +373,38 @@
         isRemoteAction = false;
         return;
       }
+      // ONLY time we send currentTime is when someone drags the scrubber
       db.ref('sync').update({
         currentTime: video.currentTime,
         lastActionBy: myId
       });
     });
 
-    // C. Drift Correction (Background sync every 5 seconds)
-    function sendDriftCorrection() {
-      if (isPlayerReady && !video.paused) {
-        db.ref('sync').update({
-          currentTime: video.currentTime,
-          lastActionBy: myId
+    // --- 6.5 WAKE UP LOGIC ---
+    // Listen for when the user switches back to this tab/app        
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && isPlayerReady) {
+        // The tab just became visible again                
+        // Let's check if we fell out of sync with Firebase                
+        db.ref('sync').once('value', snap => {
+          const data = snap.val();
+          if (data && data.isPlaying && video.paused) {
+            // Firebase says play, but our video is paused.                         
+            // This means we were frozen in the background!                        
+            isRemoteAction = true;
+            video.play().catch(e => console.log("Autoplay blocked on resume"));
+          }
         });
       }
-    }
+    });
 
     // --- 7. REACTIONS ---
     document.querySelectorAll('.reaction-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
-        e.stopPropagation(); // Don't trigger video pause
+        e.stopPropagation();
         const emoji = btn.getAttribute('data-emoji');
         db.ref('reactions').push(emoji);
-        spawnEmoji(emoji); // Show locally instantly
+        spawnEmoji(emoji);
       });
     });
 
@@ -413,7 +412,7 @@
       const emoji = snap.val();
       if (emoji) {
         spawnEmoji(emoji);
-        snap.ref.remove(); // Clean up Firebase after displaying
+        snap.ref.remove();
       }
     });
 
@@ -421,7 +420,7 @@
       const el = document.createElement('div');
       el.classList.add('floating-emoji');
       el.innerText = emoji;
-      el.style.left = Math.random() * 70 + 15 + '%'; // Random horizontal position
+      el.style.left = Math.random() * 70 + 15 + '%';
       reactionsContainer.appendChild(el);
       setTimeout(() => el.remove(), 2500);
     }
