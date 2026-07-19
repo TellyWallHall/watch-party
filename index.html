@@ -9,7 +9,6 @@
   <style>
     :root {
       --bg: #000000;
-      --controls-bg: rgba(20, 20, 20, 0.9);
       --accent: #ffffff;
       --gray: #888888;
     }
@@ -25,6 +24,7 @@
       color: var(--accent);
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       overflow: hidden;
+      /* Prevents scrolling/bouncing */
       height: 100vh;
       width: 100vw;
       -webkit-user-select: none;
@@ -68,7 +68,7 @@
       color: var(--bg);
     }
 
-    .btn.ready-active {
+    .btn.active {
       background: var(--accent);
       color: var(--bg);
     }
@@ -77,117 +77,71 @@
       display: none;
     }
 
-    /* Video Container */
+    /* Video Container - Fills screen completely */
     #video-container {
       display: none;
-      position: relative;
-      width: 100vw;
-      height: 100vh;
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
       background: #000;
     }
 
+    /* Native Video Player styling */
     video {
       width: 100%;
       height: 100%;
       object-fit: contain;
-    }
-
-    /* Controls */
-    #controls {
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      background: linear-gradient(transparent, rgba(0, 0, 0, 0.8));
-      padding: 40px 20px 30px;
-      opacity: 0;
-      transition: opacity 0.3s;
-    }
-
-    #video-container:hover #controls,
-    #video-container.touched #controls {
-      opacity: 1;
-    }
-
-    #progress-bar {
-      width: 100%;
-      height: 5px;
-      background: var(--gray);
-      border-radius: 5px;
-      cursor: pointer;
-      margin-bottom: 20px;
-      position: relative;
-    }
-
-    #progress-fill {
-      height: 100%;
-      background: var(--accent);
-      border-radius: 5px;
-      width: 0%;
-    }
-
-    .controls-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .controls-left,
-    .controls-right {
-      display: flex;
-      align-items: center;
-      gap: 25px;
-    }
-
-    .control-btn {
-      background: none;
-      border: none;
-      color: var(--accent);
-      font-size: 22px;
-      cursor: pointer;
-      outline: none;
-    }
-
-    #time-display {
-      font-size: 14px;
-      font-weight: 300;
-      color: var(--gray);
+      /* Keeps video proportional, adds black bars if needed */
+      background: #000;
     }
 
     /* Reactions */
     #reactions-container {
       position: absolute;
-      bottom: 150px;
+      top: 0;
       left: 0;
       right: 0;
+      bottom: 0;
       pointer-events: none;
+      /* Lets clicks pass through to video */
       overflow: hidden;
-      height: 50vh;
+      z-index: 10;
     }
 
-    .reaction-btns {
+    .reaction-bar {
+      position: absolute;
+      top: 20px;
+      right: 20px;
       display: flex;
-      gap: 15px;
+      flex-direction: column;
+      gap: 10px;
+      z-index: 20;
+      /* pointer-events none on container, auto on buttons so they are clickable */
+      pointer-events: none;
     }
 
     .reaction-btn {
-      background: rgba(255, 255, 255, 0.1);
+      background: rgba(255, 255, 255, 0.15);
       border: none;
       border-radius: 50%;
-      width: 40px;
-      height: 40px;
-      font-size: 20px;
+      width: 44px;
+      height: 44px;
+      font-size: 22px;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
+      pointer-events: auto;
     }
 
     .floating-emoji {
       position: absolute;
-      bottom: 0;
-      font-size: 30px;
-      animation: floatUp 2s ease-out forwards;
+      bottom: -50px;
+      font-size: 35px;
+      animation: floatUp 2.5s ease-out forwards;
+      pointer-events: none;
     }
 
     @keyframes floatUp {
@@ -197,22 +151,15 @@
       }
 
       100% {
-        transform: translateY(-300px) scale(1.5);
+        transform: translateY(-60vh) scale(1.5);
         opacity: 0;
       }
     }
 
-    /* Sync Indicator */
-    #sync-indicator {
-      position: absolute;
-      top: 20px;
-      right: 20px;
-      width: 10px;
-      height: 10px;
-      background: #4caf50;
-      border-radius: 50%;
-      opacity: 0;
-      transition: opacity 0.3s;
+    #status-text {
+      color: var(--gray);
+      font-size: 14px;
+      max-width: 250px;
     }
 
   </style>
@@ -226,35 +173,21 @@
     <button class="btn" id="load-btn"><i class="fas fa-film"></i> Load Video</button>
     <input type="file" id="file-input" accept="video/*">
     <button class="btn" id="ready-btn" style="display: none;"><i class="fas fa-check"></i> I'm Ready</button>
-    <p style="color: var(--gray); font-size: 12px;" id="status-text">Waiting for video...</p>
+    <p id="status-text">Waiting for video...</p>
   </div>
 
   <!-- Video Screen -->
   <div id="video-container">
-    <div id="sync-indicator"></div>
-    <video id="video-player" playsinline></video>
+    <!-- Native HTML5 Player with built-in controls -->
+    <video id="video-player" playsinline controls></video>
 
     <div id="reactions-container"></div>
 
-    <div id="controls">
-      <div id="progress-bar">
-        <div id="progress-fill"></div>
-      </div>
-      <div class="controls-row">
-        <div class="controls-left">
-          <button class="control-btn" id="play-btn"><i class="fas fa-play"></i></button>
-          <span id="time-display">0:00 / 0:00</span>
-        </div>
-        <div class="controls-right">
-          <div class="reaction-btns">
-            <button class="reaction-btn" data-emoji="😂">😂</button>
-            <button class="reaction-btn" data-emoji="😱">😱</button>
-            <button class="reaction-btn" data-emoji="❤️">❤️</button>
-            <button class="reaction-btn" data-emoji="🔥">🔥</button>
-          </div>
-          <button class="control-btn" id="fullscreen-btn"><i class="fas fa-expand"></i></button>
-        </div>
-      </div>
+    <div class="reaction-bar">
+      <button class="reaction-btn" data-emoji="😂">😂</button>
+      <button class="reaction-btn" data-emoji="😱">😱</button>
+      <button class="reaction-btn" data-emoji="❤️">❤️</button>
+      <button class="reaction-btn" data-emoji="🔥">🔥</button>
     </div>
   </div>
 
@@ -276,15 +209,12 @@
     }
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
-    const stateRef = db.ref('watchparty/state');
-    const reactionsRef = db.ref('watchparty/reactions');
 
     // --- 2. STATE VARIABLES ---
-    const myId = Math.random().toString(36).substr(2, 9); // Unique ID for this session to prevent echo
-    let isLocalAction = false; // Flag to prevent our own Firebase updates from triggering our player
-    let isReady = false;
-    let isRemoteReady = false;
-    let driftInterval = null;
+    const myId = Math.random().toString(36).substr(2, 9);
+    let isRemoteAction = false; // Crucial: Prevents infinite Firebase loops
+    let myRole = null; // 'host' or 'guest'
+    let isPlayerReady = false;
 
     // --- 3. DOM ELEMENTS ---
     const setupScreen = document.getElementById('setup-screen');
@@ -294,67 +224,120 @@
     const loadBtn = document.getElementById('load-btn');
     const readyBtn = document.getElementById('ready-btn');
     const statusText = document.getElementById('status-text');
-    const playBtn = document.getElementById('play-btn');
-    const progressBar = document.getElementById('progress-bar');
-    const progressFill = document.getElementById('progress-fill');
-    const timeDisplay = document.getElementById('time-display');
-    const fullscreenBtn = document.getElementById('fullscreen-btn');
     const reactionsContainer = document.getElementById('reactions-container');
-    const syncIndicator = document.getElementById('sync-indicator');
 
-    // --- 4. SETUP & READY LOGIC ---
+    // --- 4. SETUP & ROLE ASSIGNMENT ---
+
+    // Assign roles. First person to connect is Host, second is Guest.
+    // When they disconnect, Firebase clears their role.
+    db.ref('.info/connected').on('value', snap => {
+      if (snap.val() === true) {
+        // Check if host slot is empty
+        db.ref('host').once('value', hostSnap => {
+          if (!hostSnap.exists()) {
+            myRole = 'host';
+            db.ref('host').onDisconnect().remove();
+            db.ref('host').set({
+              id: myId,
+              ready: false
+            });
+          } else {
+            myRole = 'guest';
+            db.ref('guest').onDisconnect().remove();
+            db.ref('guest').set({
+              id: myId,
+              ready: false
+            });
+          }
+        });
+      }
+    });
+
     loadBtn.addEventListener('click', () => fileInput.click());
 
     fileInput.addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (file) {
-        const localUrl = URL.createObjectURL(file);
-        video.src = localUrl;
+        video.src = URL.createObjectURL(file);
         readyBtn.style.display = 'flex';
         loadBtn.innerHTML = '<i class="fas fa-check-circle"></i> Video Loaded';
         loadBtn.style.borderColor = '#4caf50';
         loadBtn.style.color = '#4caf50';
-        statusText.innerText = "Tap ready when you're set!";
+        statusText.innerText = "Tap Ready when you're set.";
       }
     });
 
     readyBtn.addEventListener('click', () => {
-      isReady = true;
-      readyBtn.classList.add('ready-active');
-      readyBtn.innerHTML = '<i class="fas fa-check"></i> Ready!';
-      statusText.innerText = "Waiting for the other person...";
+      // iOS WORKAROUND: You MUST call play() directly inside a click handler 
+      // to "unlock" the video element for future programmatic plays.
+      video.play().then(() => {
+        video.pause(); // Immediately pause, we just needed to unlock it
+        isPlayerReady = true;
+        readyBtn.classList.add('active');
+        readyBtn.innerHTML = '<i class="fas fa-check"></i> Ready!';
+        statusText.innerText = "Waiting for the other person...";
 
-      // Notify Firebase
-      stateRef.update({
-        [myId.replace('.', '_') + '_ready']: true
+        db.ref(myRole + '/ready').set(true);
+      }).catch(e => {
+        statusText.innerText = "Error unlocking video. Try tapping Ready again.";
       });
-
-      checkBothReady();
     });
 
-    function checkBothReady() {
-      // This will be handled by the Firebase listener below
-    }
+    // Listen for BOTH users to be ready before showing the video
+    db.ref('host/ready').on('value', snap => {
+      checkBothReady(snap.val(), 'host');
+    });
+    db.ref('guest/ready').on('value', snap => {
+      checkBothReady(snap.val(), 'guest');
+    });
 
-    // --- 5. FIREBASE LISTENERS ---
-    // Listen for State Changes (Play/Pause/Seek)
-    stateRef.on('value', (snapshot) => {
-      const data = snapshot.val();
-      if (!data) return;
+    let hostReady = false,
+      guestReady = false;
 
-      // Check Ready Status
-      const readyKeys = Object.keys(data).filter(k => k.endsWith('_ready') && data[k] === true);
-      if (readyKeys.length >= 2) {
+    function checkBothReady(val, role) {
+      if (role === 'host') hostReady = val;
+      if (role === 'guest') guestReady = val;
+
+      if (hostReady && guestReady) {
         startWatchParty();
       }
+    }
 
-      // Handle Sync (Play/Pause/Seek)
-      if (data.lastActionBy && data.lastActionBy !== myId) {
-        syncIndicator.style.background = '#ff9800'; // Syncing
+    // --- 5. START WATCH PARTY ---
+    function startWatchParty() {
+      if (videoContainer.style.display === 'block') return; // Already started
 
-        // Play/Pause
+      setupScreen.style.display = 'none';
+      videoContainer.style.display = 'block';
+
+      // Clear any old sync data from a previous session, start fresh
+      db.ref('sync').set({
+        isPlaying: false,
+        currentTime: 0,
+        lastActionBy: myId
+      });
+
+      // Start listening for sync changes NOW
+      listenForSync();
+
+      // Start drift correction interval
+      setInterval(sendDriftCorrection, 5000);
+    }
+
+    // --- 6. SYNC LOGIC (The Tricky Part) ---
+
+    // A. Listen to Firebase
+    function listenForSync() {
+      db.ref('sync').on('value', snap => {
+        const data = snap.val();
+        if (!data || data.lastActionBy === myId) return; // Ignore own echoes
+
+        // Only apply sync if the player has been unlocked (Ready button tapped)
+        if (!isPlayerReady) return;
+
+        // Handle Play/Pause
         if (data.isPlaying !== undefined && video.paused !== data.isPlaying) {
-          isLocalAction = true; // Prevent echoing
+          isRemoteAction = true; // Set flag so our local listener ignores this
           if (data.isPlaying) {
             video.play().catch(e => console.log("Autoplay blocked"));
           } else {
@@ -362,149 +345,85 @@
           }
         }
 
-        // Seeking
-        if (data.currentTime !== undefined) {
-          const diff = Math.abs(video.currentTime - data.currentTime);
-          if (diff > 1.5) { // Only seek if drift is > 1.5 seconds
-            isLocalAction = true;
-            video.currentTime = data.currentTime;
-          }
+        // Handle Seeking (Only force seek if drift is > 1.5 seconds to avoid jitter)
+        if (data.currentTime !== undefined && Math.abs(video.currentTime - data.currentTime) > 1.5) {
+          isRemoteAction = true;
+          video.currentTime = data.currentTime;
         }
-
-        setTimeout(() => {
-          syncIndicator.style.background = '#4caf50';
-        }, 500);
-      }
-    });
-
-    // Listen for Reactions
-    reactionsRef.on('child_added', (snapshot) => {
-      const emoji = snapshot.val();
-      spawnEmoji(emoji);
-      // Remove from Firebase after displaying to keep DB clean
-      snapshot.ref.remove();
-    });
-
-    // --- 6. START WATCH PARTY ---
-    function startWatchParty() {
-      if (videoContainer.style.display === 'block') return; // Already started
-
-      setupScreen.style.display = 'none';
-      videoContainer.style.display = 'block';
-      syncIndicator.style.opacity = 1;
-
-      // Mobile touch controls toggle
-      videoContainer.addEventListener('touchstart', () => {
-        videoContainer.classList.toggle('touched');
       });
-
-      // Start periodic drift correction
-      driftInterval = setInterval(sendDriftCorrection, 5000);
     }
 
-    // --- 7. LOCAL PLAYER EVENT LISTENERS ---
+    // B. Local Player Event Listeners
     video.addEventListener('play', () => {
-      playBtn.innerHTML = '<i class="fas fa-pause"></i>';
-      if (!isLocalAction) {
-        stateRef.update({
-          isPlaying: true,
-          currentTime: video.currentTime,
-          lastActionBy: myId
-        });
+      if (isRemoteAction) {
+        isRemoteAction = false;
+        return;
       }
-      isLocalAction = false;
-    });
-
-    video.addEventListener('pause', () => {
-      playBtn.innerHTML = '<i class="fas fa-play"></i>';
-      if (!isLocalAction) {
-        stateRef.update({
-          isPlaying: false,
-          currentTime: video.currentTime,
-          lastActionBy: myId
-        });
-      }
-      isLocalAction = false;
-    });
-
-    video.addEventListener('timeupdate', () => {
-      if (!isLocalAction) {
-        updateProgressBar();
-      }
-    });
-
-    // --- 8. CUSTOM CONTROLS LOGIC ---
-    playBtn.addEventListener('click', () => {
-      if (video.paused) {
-        video.play();
-      } else {
-        video.pause();
-      }
-    });
-
-    progressBar.addEventListener('click', (e) => {
-      const rect = progressBar.getBoundingClientRect();
-      const pos = (e.clientX - rect.left) / progressBar.offsetWidth;
-      video.currentTime = pos * video.duration;
-      stateRef.update({
+      db.ref('sync').update({
+        isPlaying: true,
         currentTime: video.currentTime,
         lastActionBy: myId
       });
     });
 
-    fullscreenBtn.addEventListener('click', () => {
-      if (videoContainer.requestFullscreen) {
-        videoContainer.requestFullscreen();
-      } else if (videoContainer.webkitRequestFullscreen) { // iOS Safari
-        videoContainer.webkitRequestFullscreen();
+    video.addEventListener('pause', () => {
+      if (isRemoteAction) {
+        isRemoteAction = false;
+        return;
       }
-    });
-
-    // Reaction Buttons
-    document.querySelectorAll('.reaction-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const emoji = btn.getAttribute('data-emoji');
-        // Push to Firebase for the other person
-        reactionsRef.push(emoji);
-        // Show locally instantly
-        spawnEmoji(emoji);
+      db.ref('sync').update({
+        isPlaying: false,
+        currentTime: video.currentTime,
+        lastActionBy: myId
       });
     });
 
-    // --- 9. HELPER FUNCTIONS ---
-    function updateProgressBar() {
-      if (!video.duration) return;
-      const percent = (video.currentTime / video.duration) * 100;
-      progressFill.style.width = percent + '%';
+    video.addEventListener('seeked', () => {
+      if (isRemoteAction) {
+        isRemoteAction = false;
+        return;
+      }
+      db.ref('sync').update({
+        currentTime: video.currentTime,
+        lastActionBy: myId
+      });
+    });
 
-      const currentMins = Math.floor(video.currentTime / 60);
-      const currentSecs = Math.floor(video.currentTime % 60).toString().padStart(2, '0');
-      const durationMins = Math.floor(video.duration / 60);
-      const durationSecs = Math.floor(video.duration % 60).toString().padStart(2, '0');
-
-      timeDisplay.innerText = `${currentMins}:${currentSecs} / ${durationMins}:${durationSecs}`;
-    }
-
+    // C. Drift Correction (Background sync every 5 seconds)
     function sendDriftCorrection() {
-      if (!video.paused) {
-        stateRef.update({
+      if (isPlayerReady && !video.paused) {
+        db.ref('sync').update({
           currentTime: video.currentTime,
           lastActionBy: myId
         });
       }
     }
 
+    // --- 7. REACTIONS ---
+    document.querySelectorAll('.reaction-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation(); // Don't trigger video pause
+        const emoji = btn.getAttribute('data-emoji');
+        db.ref('reactions').push(emoji);
+        spawnEmoji(emoji); // Show locally instantly
+      });
+    });
+
+    db.ref('reactions').on('child_added', snap => {
+      const emoji = snap.val();
+      if (emoji) {
+        spawnEmoji(emoji);
+        snap.ref.remove(); // Clean up Firebase after displaying
+      }
+    });
+
     function spawnEmoji(emoji) {
       const el = document.createElement('div');
       el.classList.add('floating-emoji');
       el.innerText = emoji;
-      // Randomize horizontal position
-      el.style.left = Math.random() * 80 + 10 + '%';
+      el.style.left = Math.random() * 70 + 15 + '%'; // Random horizontal position
       reactionsContainer.appendChild(el);
-      // Remove from DOM after animation
-      setTimeout(() => {
-        el.remove();
-      }, 2000);
+      setTimeout(() => el.remove(), 2500);
     }
 
   </script>
