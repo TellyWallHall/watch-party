@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Watch Party</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    :root {
+      --bg: #000000;
+      --controls-bg: rgba(20, 20, 20, 0.9);
+      --accent: #ffffff;
+      --gray: #888888;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--accent);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      overflow: hidden;
+      height: 100vh;
+      width: 100vw;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    /* Setup Screen */
+    #setup-screen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      gap: 30px;
+      padding: 20px;
+      text-align: center;
+    }
+
+    #setup-screen h1 {
+      font-size: 24px;
+      font-weight: 300;
+      letter-spacing: 2px;
+    }
+
+    .btn {
+      background: transparent;
+      color: var(--accent);
+      border: 1px solid var(--accent);
+      padding: 15px 30px;
+      font-size: 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .btn:active {
+      background: var(--accent);
+      color: var(--bg);
+    }
+
+    .btn.ready-active {
+      background: var(--accent);
+      color: var(--bg);
+    }
+
+    #file-input {
+      display: none;
+    }
+
+    /* Video Container */
+    #video-container {
+      display: none;
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      background: #000;
+    }
+
+    video {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    /* Controls */
+    #controls {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: linear-gradient(transparent, rgba(0, 0, 0, 0.8));
+      padding: 40px 20px 30px;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+
+    #video-container:hover #controls,
+    #video-container.touched #controls {
+      opacity: 1;
+    }
+
+    #progress-bar {
+      width: 100%;
+      height: 5px;
+      background: var(--gray);
+      border-radius: 5px;
+      cursor: pointer;
+      margin-bottom: 20px;
+      position: relative;
+    }
+
+    #progress-fill {
+      height: 100%;
+      background: var(--accent);
+      border-radius: 5px;
+      width: 0%;
+    }
+
+    .controls-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .controls-left,
+    .controls-right {
+      display: flex;
+      align-items: center;
+      gap: 25px;
+    }
+
+    .control-btn {
+      background: none;
+      border: none;
+      color: var(--accent);
+      font-size: 22px;
+      cursor: pointer;
+      outline: none;
+    }
+
+    #time-display {
+      font-size: 14px;
+      font-weight: 300;
+      color: var(--gray);
+    }
+
+    /* Reactions */
+    #reactions-container {
+      position: absolute;
+      bottom: 150px;
+      left: 0;
+      right: 0;
+      pointer-events: none;
+      overflow: hidden;
+      height: 50vh;
+    }
+
+    .reaction-btns {
+      display: flex;
+      gap: 15px;
+    }
+
+    .reaction-btn {
+      background: rgba(255, 255, 255, 0.1);
+      border: none;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      font-size: 20px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .floating-emoji {
+      position: absolute;
+      bottom: 0;
+      font-size: 30px;
+      animation: floatUp 2s ease-out forwards;
+    }
+
+    @keyframes floatUp {
+      0% {
+        transform: translateY(0) scale(1);
+        opacity: 1;
+      }
+
+      100% {
+        transform: translateY(-300px) scale(1.5);
+        opacity: 0;
+      }
+    }
+
+    /* Sync Indicator */
+    #sync-indicator {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      width: 10px;
+      height: 10px;
+      background: #4caf50;
+      border-radius: 50%;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+
+  </style>
+</head>
+
+<body>
+
+  <!-- Setup Screen -->
+  <div id="setup-screen">
+    <h1>WATCH PARTY</h1>
+    <button class="btn" id="load-btn"><i class="fas fa-film"></i> Load Video</button>
+    <input type="file" id="file-input" accept="video/*">
+    <button class="btn" id="ready-btn" style="display: none;"><i class="fas fa-check"></i> I'm Ready</button>
+    <p style="color: var(--gray); font-size: 12px;" id="status-text">Waiting for video...</p>
+  </div>
+
+  <!-- Video Screen -->
+  <div id="video-container">
+    <div id="sync-indicator"></div>
+    <video id="video-player" playsinline></video>
+
+    <div id="reactions-container"></div>
+
+    <div id="controls">
+      <div id="progress-bar">
+        <div id="progress-fill"></div>
+      </div>
+      <div class="controls-row">
+        <div class="controls-left">
+          <button class="control-btn" id="play-btn"><i class="fas fa-play"></i></button>
+          <span id="time-display">0:00 / 0:00</span>
+        </div>
+        <div class="controls-right">
+          <div class="reaction-btns">
+            <button class="reaction-btn" data-emoji="😂">😂</button>
+            <button class="reaction-btn" data-emoji="😱">😱</button>
+            <button class="reaction-btn" data-emoji="❤️">❤️</button>
+            <button class="reaction-btn" data-emoji="🔥">🔥</button>
+          </div>
+          <button class="control-btn" id="fullscreen-btn"><i class="fas fa-expand"></i></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+
+  <script>
+    // --- 1. FIREBASE CONFIG ---
+    const firebaseConfig = {
+      apiKey: "AIzaSyA-aYLP7eTUr3vyGqIuFJ1GVE42JjcM1UU",
+      authDomain: "fbchesst.firebaseapp.com",
+      databaseURL: "https://fbchesst-default-rtdb.firebaseio.com",
+      projectId: "fbchesst",
+      storageBucket: "fbchesst.firebasestorage.app",
+      messagingSenderId: "774699466227",
+      appId: "1:774699466227:web:e140d20877c19ec1e9e686",
+      measurementId: "G-1LDBXBT2QD"
+    }
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+    const stateRef = db.ref('watchparty/state');
+    const reactionsRef = db.ref('watchparty/reactions');
+
+    // --- 2. STATE VARIABLES ---
+    const myId = Math.random().toString(36).substr(2, 9); // Unique ID for this session to prevent echo
+    let isLocalAction = false; // Flag to prevent our own Firebase updates from triggering our player
+    let isReady = false;
+    let isRemoteReady = false;
+    let driftInterval = null;
+
+    // --- 3. DOM ELEMENTS ---
+    const setupScreen = document.getElementById('setup-screen');
+    const videoContainer = document.getElementById('video-container');
+    const video = document.getElementById('video-player');
+    const fileInput = document.getElementById('file-input');
+    const loadBtn = document.getElementById('load-btn');
+    const readyBtn = document.getElementById('ready-btn');
+    const statusText = document.getElementById('status-text');
+    const playBtn = document.getElementById('play-btn');
+    const progressBar = document.getElementById('progress-bar');
+    const progressFill = document.getElementById('progress-fill');
+    const timeDisplay = document.getElementById('time-display');
+    const fullscreenBtn = document.getElementById('fullscreen-btn');
+    const reactionsContainer = document.getElementById('reactions-container');
+    const syncIndicator = document.getElementById('sync-indicator');
+
+    // --- 4. SETUP & READY LOGIC ---
+    loadBtn.addEventListener('click', () => fileInput.click());
+
+    fileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        const localUrl = URL.createObjectURL(file);
+        video.src = localUrl;
+        readyBtn.style.display = 'flex';
+        loadBtn.innerHTML = '<i class="fas fa-check-circle"></i> Video Loaded';
+        loadBtn.style.borderColor = '#4caf50';
+        loadBtn.style.color = '#4caf50';
+        statusText.innerText = "Tap ready when you're set!";
+      }
+    });
+
+    readyBtn.addEventListener('click', () => {
+      isReady = true;
+      readyBtn.classList.add('ready-active');
+      readyBtn.innerHTML = '<i class="fas fa-check"></i> Ready!';
+      statusText.innerText = "Waiting for the other person...";
+
+      // Notify Firebase
+      stateRef.update({
+        [myId.replace('.', '_') + '_ready']: true
+      });
+
+      checkBothReady();
+    });
+
+    function checkBothReady() {
+      // This will be handled by the Firebase listener below
+    }
+
+    // --- 5. FIREBASE LISTENERS ---
+    // Listen for State Changes (Play/Pause/Seek)
+    stateRef.on('value', (snapshot) => {
+      const data = snapshot.val();
+      if (!data) return;
+
+      // Check Ready Status
+      const readyKeys = Object.keys(data).filter(k => k.endsWith('_ready') && data[k] === true);
+      if (readyKeys.length >= 2) {
+        startWatchParty();
+      }
+
+      // Handle Sync (Play/Pause/Seek)
+      if (data.lastActionBy && data.lastActionBy !== myId) {
+        syncIndicator.style.background = '#ff9800'; // Syncing
+
+        // Play/Pause
+        if (data.isPlaying !== undefined && video.paused !== data.isPlaying) {
+          isLocalAction = true; // Prevent echoing
+          if (data.isPlaying) {
+            video.play().catch(e => console.log("Autoplay blocked"));
+          } else {
+            video.pause();
+          }
+        }
+
+        // Seeking
+        if (data.currentTime !== undefined) {
+          const diff = Math.abs(video.currentTime - data.currentTime);
+          if (diff > 1.5) { // Only seek if drift is > 1.5 seconds
+            isLocalAction = true;
+            video.currentTime = data.currentTime;
+          }
+        }
+
+        setTimeout(() => {
+          syncIndicator.style.background = '#4caf50';
+        }, 500);
+      }
+    });
+
+    // Listen for Reactions
+    reactionsRef.on('child_added', (snapshot) => {
+      const emoji = snapshot.val();
+      spawnEmoji(emoji);
+      // Remove from Firebase after displaying to keep DB clean
+      snapshot.ref.remove();
+    });
+
+    // --- 6. START WATCH PARTY ---
+    function startWatchParty() {
+      if (videoContainer.style.display === 'block') return; // Already started
+
+      setupScreen.style.display = 'none';
+      videoContainer.style.display = 'block';
+      syncIndicator.style.opacity = 1;
+
+      // Mobile touch controls toggle
+      videoContainer.addEventListener('touchstart', () => {
+        videoContainer.classList.toggle('touched');
+      });
+
+      // Start periodic drift correction
+      driftInterval = setInterval(sendDriftCorrection, 5000);
+    }
+
+    // --- 7. LOCAL PLAYER EVENT LISTENERS ---
+    video.addEventListener('play', () => {
+      playBtn.innerHTML = '<i class="fas fa-pause"></i>';
+      if (!isLocalAction) {
+        stateRef.update({
+          isPlaying: true,
+          currentTime: video.currentTime,
+          lastActionBy: myId
+        });
+      }
+      isLocalAction = false;
+    });
+
+    video.addEventListener('pause', () => {
+      playBtn.innerHTML = '<i class="fas fa-play"></i>';
+      if (!isLocalAction) {
+        stateRef.update({
+          isPlaying: false,
+          currentTime: video.currentTime,
+          lastActionBy: myId
+        });
+      }
+      isLocalAction = false;
+    });
+
+    video.addEventListener('timeupdate', () => {
+      if (!isLocalAction) {
+        updateProgressBar();
+      }
+    });
+
+    // --- 8. CUSTOM CONTROLS LOGIC ---
+    playBtn.addEventListener('click', () => {
+      if (video.paused) {
+        video.play();
+      } else {
+        video.pause();
+      }
+    });
+
+    progressBar.addEventListener('click', (e) => {
+      const rect = progressBar.getBoundingClientRect();
+      const pos = (e.clientX - rect.left) / progressBar.offsetWidth;
+      video.currentTime = pos * video.duration;
+      stateRef.update({
+        currentTime: video.currentTime,
+        lastActionBy: myId
+      });
+    });
+
+    fullscreenBtn.addEventListener('click', () => {
+      if (videoContainer.requestFullscreen) {
+        videoContainer.requestFullscreen();
+      } else if (videoContainer.webkitRequestFullscreen) { // iOS Safari
+        videoContainer.webkitRequestFullscreen();
+      }
+    });
+
+    // Reaction Buttons
+    document.querySelectorAll('.reaction-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const emoji = btn.getAttribute('data-emoji');
+        // Push to Firebase for the other person
+        reactionsRef.push(emoji);
+        // Show locally instantly
+        spawnEmoji(emoji);
+      });
+    });
+
+    // --- 9. HELPER FUNCTIONS ---
+    function updateProgressBar() {
+      if (!video.duration) return;
+      const percent = (video.currentTime / video.duration) * 100;
+      progressFill.style.width = percent + '%';
+
+      const currentMins = Math.floor(video.currentTime / 60);
+      const currentSecs = Math.floor(video.currentTime % 60).toString().padStart(2, '0');
+      const durationMins = Math.floor(video.duration / 60);
+      const durationSecs = Math.floor(video.duration % 60).toString().padStart(2, '0');
+
+      timeDisplay.innerText = `${currentMins}:${currentSecs} / ${durationMins}:${durationSecs}`;
+    }
+
+    function sendDriftCorrection() {
+      if (!video.paused) {
+        stateRef.update({
+          currentTime: video.currentTime,
+          lastActionBy: myId
+        });
+      }
+    }
+
+    function spawnEmoji(emoji) {
+      const el = document.createElement('div');
+      el.classList.add('floating-emoji');
+      el.innerText = emoji;
+      // Randomize horizontal position
+      el.style.left = Math.random() * 80 + 10 + '%';
+      reactionsContainer.appendChild(el);
+      // Remove from DOM after animation
+      setTimeout(() => {
+        el.remove();
+      }, 2000);
+    }
+
+  </script>
+</body>
+
+</html>
